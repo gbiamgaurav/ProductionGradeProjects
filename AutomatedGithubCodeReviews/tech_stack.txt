@@ -1,0 +1,37 @@
+
+## AI ML - Backend
+1. OpenAI
+2. LangGraph
+3. LangFuse 
+4. FastAPI - async function
+5. Celery - background processes
+6. Redis - AWS Elastic Cache - Caching Porcess
+7. RDS - SQL database
+8. SQL Alchemy 
+9. httpx - async http calls to github
+10. PyJWT - Authentication
+
+
+# Infrastructure
+1. Terraform - IAAC 
+2. Docker - Containerization
+3. S3 Bucket
+4. ECR 
+5. EKS (Kubernetes services)
+6. CI-CD - Github Actions 
+7. kubectl - interact with kubernetes cluster 
+
+
+# LLM Evaluation
+1. RAGAS - Evaluation framework
+2. Prometheus
+3. Grafana 
+4. Alembic - data migration tool 
+5. Github App 
+6. Cryptograhy - HMAC SHA 256
+
+
+## Project Architecture 
+
+HLD 
+
