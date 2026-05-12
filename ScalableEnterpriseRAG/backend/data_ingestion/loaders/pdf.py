@@ -1,5 +1,6 @@
 
 import io
+import asyncio
 import logfire
 from pypdf import PdfReader, PdfWriter
 from google.cloud import documentai
@@ -8,10 +9,20 @@ from backend.config import settings
 client = documentai.DocumentProcessorServiceClient()
 MAX_PAGES_PER_REQUEST = 15
 
-def parse_pdf(file_path: str):
+# Global semaphore: max 5 concurrent Document AI calls across all files
+_doc_ai_semaphore: asyncio.Semaphore | None = None
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _doc_ai_semaphore
+    if _doc_ai_semaphore is None:
+        _doc_ai_semaphore = asyncio.Semaphore(5)
+    return _doc_ai_semaphore
+
+
+async def parse_pdf(file_path: str) -> str:
     """
-    Parses PDF using Google Cloud Document AI.
-    Automatically splits large PDFs into 15-page chunks to bypass synchronous API limits.
+    Parses a PDF using Google Cloud Document AI.
+    Page chunks are sent concurrently (up to 5 at a time globally).
     """
     with logfire.span("📄 Document AI Parsing", filename=file_path):
         try:
@@ -20,37 +31,41 @@ def parse_pdf(file_path: str):
             logfire.info(f"Total pages: {total_pages}")
 
             name = client.processor_path(
-                settings.PROJECT_ID, 
-                settings.GCP_DOC_AI_LOCATION, 
+                settings.PROJECT_ID,
+                settings.GCP_DOC_AI_LOCATION,
                 settings.GCP_DOC_AI_PROCESSOR_ID
             )
 
-            full_text = ""
-
-            # If small enough, process entirely
             if total_pages <= MAX_PAGES_PER_REQUEST:
                 with open(file_path, "rb") as f:
                     image_content = f.read()
-                full_text = process_document_chunk(image_content, name)
+                async with _get_semaphore():
+                    full_text = await asyncio.to_thread(process_document_chunk, image_content, name)
             else:
-                # Split into chunks of MAX_PAGES_PER_REQUEST
                 logfire.info(f"PDF exceeds {MAX_PAGES_PER_REQUEST} pages. Splitting into chunks...")
-                
+
+                # Build all page-chunk byte payloads up front (fast, CPU-bound)
+                chunk_payloads = []
                 for i in range(0, total_pages, MAX_PAGES_PER_REQUEST):
+                    end = min(i + MAX_PAGES_PER_REQUEST, total_pages)
                     writer = PdfWriter()
-                    chunk_end = min(i + MAX_PAGES_PER_REQUEST, total_pages)
-                    
-                    for page_num in range(i, chunk_end):
+                    for page_num in range(i, end):
                         writer.add_page(reader.pages[page_num])
-                    
-                    # Write chunk to bytes
-                    with io.BytesIO() as bytes_stream:
-                        writer.write(bytes_stream)
-                        chunk_bytes = bytes_stream.getvalue()
-                        
-                    with logfire.span(f"Processing pages {i+1} to {chunk_end}"):
-                        chunk_text = process_document_chunk(chunk_bytes, name)
-                        full_text += chunk_text + "\n"
+                    with io.BytesIO() as bs:
+                        writer.write(bs)
+                        chunk_payloads.append((i + 1, end, bs.getvalue()))
+
+                async def process_range(start: int, end: int, chunk_bytes: bytes) -> str:
+                    async with _get_semaphore():
+                        with logfire.span(f"Processing pages {start} to {end}"):
+                            return await asyncio.to_thread(
+                                process_document_chunk, chunk_bytes, name
+                            )
+
+                results = await asyncio.gather(
+                    *[process_range(s, e, b) for s, e, b in chunk_payloads]
+                )
+                full_text = "\n".join(results)
 
             if not full_text.strip():
                 logfire.warning(f"⚠️ Document AI returned empty text for {file_path}")
@@ -62,20 +77,15 @@ def parse_pdf(file_path: str):
         except Exception as e:
             logfire.error(f"❌ Document AI Parse Failed: {e}")
             logfire.info("💡 Ensure the Processor ID is correct and the API is enabled.")
-            raise e
+            raise
 
 
 def process_document_chunk(image_content: bytes, name: str) -> str:
-    """Helper function to send a specific byte chunk to Document AI"""
+    """Sends a PDF byte chunk to Document AI and returns extracted text."""
     raw_document = documentai.RawDocument(
-        content=image_content, 
+        content=image_content,
         mime_type="application/pdf"
     )
-
-    request = documentai.ProcessRequest(
-        name=name, 
-        raw_document=raw_document
-    )
-
+    request = documentai.ProcessRequest(name=name, raw_document=raw_document)
     result = client.process_document(request=request)
     return result.document.text

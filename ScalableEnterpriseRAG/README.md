@@ -279,6 +279,54 @@ pip install -r requirements.txt
 python -c "import langchain; import langraph; print('✅ All imports successful')"
 ```
 
+### Documentation Standards
+
+**Every code push must include proper documentation.** Follow these guides:
+
+1. **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and commit message standards
+2. **[DOCUMENTATION_CHECKLIST.md](DOCUMENTATION_CHECKLIST.md)** - Detailed documentation requirements for each push
+3. **[CHANGELOG.md](CHANGELOG.md)** - Track all notable changes
+
+### Pre-Push Verification
+
+Before pushing, run the verification script:
+
+```bash
+# Make script executable (one-time)
+chmod +x pre-push-check.sh
+
+# Run before every push
+./pre-push-check.sh
+```
+
+This script checks:
+- ✅ Documentation completeness
+- ✅ Code formatting (black)
+- ✅ Import sorting (isort)
+- ✅ Type hints (mypy)
+- ✅ Unit tests (pytest)
+- ✅ No sensitive files being committed
+
+### Pre-Push Verification
+
+Before pushing, run the verification script:
+
+```bash
+# Make script executable (one-time)
+chmod +x pre-push-check.sh
+
+# Run before every push
+./pre-push-check.sh
+```
+
+This script checks:
+- ✅ Documentation completeness
+- ✅ Code formatting (black)
+- ✅ Import sorting (isort)
+- ✅ Type hints (mypy)
+- ✅ Unit tests (pytest)
+- ✅ No sensitive files being committed
+
 ### Testing Environment Setup
 
 ```bash
@@ -380,3 +428,7 @@ For issues, questions, or contributions:
 
 **Last Updated**: May 12, 2026
 **Version**: 1.0.0
+
+
+# Run commands
+python -m backend.data_ingestion.processor data --wipe
