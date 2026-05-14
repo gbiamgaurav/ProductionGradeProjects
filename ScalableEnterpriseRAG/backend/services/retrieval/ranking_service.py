@@ -24,6 +24,7 @@ def _get_ranker() -> Ranker:
 
 
 
+
 def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[str]:
     """
     Refines retrieval results by re-scoring documents against the query semantically.
